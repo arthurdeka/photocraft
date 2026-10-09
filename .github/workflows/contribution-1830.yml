@@ -1,0 +1,80 @@
+name: Validate contribution 1830
+
+on:
+  push:
+    branches: [ci/1830-validation]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev mesa-vulkan-drivers
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: issue-1830
+          cache-on-failure: true
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: UI tests
+        run: cargo test -p photocraft-ui-egui --locked
+      - name: Clippy
+        run: cargo clippy -p photocraft-ui-egui --all-targets --locked -- -D warnings
+      - name: Layers
+        run: cargo xtask layers
+      - name: Scorecard
+        run: cargo xtask scorecard --check
+      - name: Capture original macOS labels
+        env:
+          PHOTOCRAFT_DISCARD_SNAPSHOTS: evidence/before
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('crates/ui-egui/src/discard_ui.rs')
+          text = p.read_text()
+          old = 'if mac && !reverts { tl!(b.1).to_string() } else { b.2.map_or_else(|| tl!(b.1).to_string(), |k| mnemonic(b.1, k)) }'
+          assert old in text
+          text = text.replace(old, 'b.2.map_or_else(|| tl!(b.1).to_string(), |k| mnemonic(b.1, k))')
+          text = text.replace('let labels = ["Don\'t Save", "Cancel", "Save"];', 'let labels = ["(D)on\'t Save", "(C)ancel", "(S)ave"];')
+          p.write_text(text)
+          PY
+          cargo test -p photocraft-ui-egui --locked --lib macos_asks_dont_save_cancel_save_with_the_default_last
+          git restore crates/ui-egui/src/discard_ui.rs
+      - name: Capture corrected labels
+        env:
+          PHOTOCRAFT_DISCARD_SNAPSHOTS: evidence/after
+        run: |
+          cargo test -p photocraft-ui-egui --locked --lib macos_asks_dont_save_cancel_save_with_the_default_last
+          cargo test -p photocraft-ui-egui --locked --lib windows_and_linux_ask_yes_no_cancel_with_the_default_first
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue-1830-screenshots
+          path: evidence/
+          if-no-files-found: ignore
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: issue-1830-wasm
+          cache-on-failure: true
+      - run: cargo xtask wasm
