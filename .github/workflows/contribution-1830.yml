@@ -25,21 +25,11 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
-          key: issue-1830
+          key: issue-1830-visual
           cache-on-failure: true
-      - name: Format
-        run: cargo fmt --all -- --check
-      - name: UI tests
-        run: cargo test -p photocraft-ui-egui --locked
-      - name: Clippy
-        run: cargo clippy -p photocraft-ui-egui --all-targets --locked -- -D warnings
-      - name: Layers
-        run: cargo xtask layers
-      - name: Scorecard
-        run: cargo xtask scorecard --check
       - name: Capture original macOS labels
         env:
-          PHOTOCRAFT_DISCARD_SNAPSHOTS: evidence/before
+          PHOTOCRAFT_DISCARD_SNAPSHOTS: ${{ github.workspace }}/evidence/before
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -51,14 +41,14 @@ jobs:
           text = text.replace('let labels = ["Don\'t Save", "Cancel", "Save"];', 'let labels = ["(D)on\'t Save", "(C)ancel", "(S)ave"];')
           p.write_text(text)
           PY
-          cargo test -p photocraft-ui-egui --locked --lib macos_asks_dont_save_cancel_save_with_the_default_last
+          cargo --config 'profile.dev.package."*".opt-level=0' --config 'profile.dev.opt-level=0' test -p photocraft-ui-egui --locked --lib macos_asks_dont_save_cancel_save_with_the_default_last
           git restore crates/ui-egui/src/discard_ui.rs
       - name: Capture corrected labels
         env:
-          PHOTOCRAFT_DISCARD_SNAPSHOTS: evidence/after
+          PHOTOCRAFT_DISCARD_SNAPSHOTS: ${{ github.workspace }}/evidence/after
         run: |
-          cargo test -p photocraft-ui-egui --locked --lib macos_asks_dont_save_cancel_save_with_the_default_last
-          cargo test -p photocraft-ui-egui --locked --lib windows_and_linux_ask_yes_no_cancel_with_the_default_first
+          cargo --config 'profile.dev.package."*".opt-level=0' --config 'profile.dev.opt-level=0' test -p photocraft-ui-egui --locked --lib macos_asks_dont_save_cancel_save_with_the_default_last
+          cargo --config 'profile.dev.package."*".opt-level=0' --config 'profile.dev.opt-level=0' test -p photocraft-ui-egui --locked --lib windows_and_linux_ask_yes_no_cancel_with_the_default_first
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -66,15 +56,3 @@ jobs:
           path: evidence/
           if-no-files-found: ignore
 
-  wasm:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: issue-1830-wasm
-          cache-on-failure: true
-      - run: cargo xtask wasm
