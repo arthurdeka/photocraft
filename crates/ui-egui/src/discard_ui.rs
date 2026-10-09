@@ -218,7 +218,11 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
         vec![(ButtonRole::Default, "Yes", Some(Key::Y), 84.0, Answer::Save), (ButtonRole::Alternate, "No", Some(Key::N), 84.0, Answer::Discard), cancel]
     };
     let mut answer = ctx.input_mut(|i| buttons.iter().find(|b| b.2.is_some_and(|k| i.consume_key(egui::Modifiers::NONE, k))).map(|b| b.4));
-    let labels: Vec<String> = buttons.iter().map(|b| b.2.map_or_else(|| tl!(b.1).to_string(), |k| mnemonic(b.1, k))).collect();
+    // macOS keeps the letter shortcuts without showing mnemonics in the save alert (#1830).
+    let labels: Vec<String> = buttons
+        .iter()
+        .map(|b| if mac && !reverts { tl!(b.1).to_string() } else { b.2.map_or_else(|| tl!(b.1).to_string(), |k| mnemonic(b.1, k)) })
+        .collect();
     let row: Vec<DialogButton> = buttons.iter().zip(&labels).map(|(b, label)| DialogButton::new(b.0, label, b.3)).collect();
     let modal = egui::Modal::new(egui::Id::new("discard-prompt")).show(ctx, |ui| {
         ui.set_max_width(420.0);
@@ -389,7 +393,9 @@ mod tests {
     /// The unsaved-changes prompt for `command` over `app`'s dirty documents, as `os` draws it (with
     /// the file dialogs shown and answered at the end of each frame, as the app does).
     fn prompt_for(app: PhotocraftApp, command: &str, os: egui::os::OperatingSystem) -> Prompted {
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(800.0, 600.0)).build_ui_state(
+        let builder = egui_kittest::Harness::builder().with_size(egui::vec2(800.0, 600.0));
+        let builder = if std::env::var_os("PHOTOCRAFT_DISCARD_SNAPSHOTS").is_some() { builder.wgpu() } else { builder };
+        let mut h = builder.build_ui_state(
             |ui, app| {
                 show(app, ui.ctx());
                 app.poll_file_dialog(ui.ctx(), None);
@@ -437,11 +443,20 @@ mod tests {
         h.state().discard.as_ref().map(|p| p.docs.len())
     }
 
+    fn capture(h: &mut Prompted, name: &str) {
+        if let Some(dir) = std::env::var_os("PHOTOCRAFT_DISCARD_SNAPSHOTS") {
+            let dir = std::path::PathBuf::from(dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            h.render().unwrap().save(dir.join(format!("{name}.png"))).unwrap();
+        }
+    }
+
     #[test]
     fn windows_and_linux_ask_yes_no_cancel_with_the_default_first() {
         for os in [egui::os::OperatingSystem::Windows, egui::os::OperatingSystem::Nix] {
             let mut h = prompt_on(os);
             let labels = ["(Y)es", "(N)o", "Cancel"];
+            capture(&mut h, &format!("{os:?}"));
             assert_eq!(drawn_order(&h, labels), labels, "{os:?}");
             tab_walks(&mut h, labels);
             h.key_press(Key::N);
@@ -461,7 +476,8 @@ mod tests {
     #[test]
     fn macos_asks_dont_save_cancel_save_with_the_default_last() {
         let mut h = prompt_on(egui::os::OperatingSystem::Mac);
-        let labels = ["(D)on't Save", "(C)ancel", "(S)ave"];
+        let labels = ["Don't Save", "Cancel", "Save"];
+        capture(&mut h, "Mac");
         assert_eq!(drawn_order(&h, labels), labels);
         tab_walks(&mut h, labels);
         h.key_press(Key::D);
@@ -471,6 +487,23 @@ mod tests {
         h.run_steps(2);
         assert!(h.state().discard.is_none());
         assert_eq!(h.state().session.documents().len(), 2, "Cancel closed nothing");
+    }
+
+    #[test]
+    fn macos_plain_labels_keep_save_and_escape_shortcuts() {
+        for key in [Key::S, Key::Enter] {
+            let mut h = prompt_on(egui::os::OperatingSystem::Mac);
+            let (show, asked) = crate::file_dialog::fake(vec![None]);
+            h.state_mut().services.file_dialog = Some(show);
+            h.key_press(key);
+            h.run_steps(2);
+            assert_eq!(asked.borrow().len(), 1, "{key:?} opens the save dialog");
+            assert_eq!(docs_left(&h), Some(2), "cancelling the save dialog keeps the prompt");
+            h.key_press(Key::Escape);
+            h.run_steps(2);
+            assert!(h.state().discard.is_none());
+            assert_eq!(h.state().session.documents().len(), 2, "Escape closed nothing");
+        }
     }
 
     #[test]
