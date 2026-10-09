@@ -6,6 +6,12 @@ code and original assets are MIT OR Apache-2.0 (see [`LICENSE-MIT`](LICENSE-MIT)
 in the same change; third-party assets must be permissively licensed and keep their license file
 next to them.
 
+## Contribution evidence (fork branch)
+
+| Path | Title | Author | Source | License |
+|---|---|---|---|---|
+| `evidence-1830/{before,after}/*.png` | Unsaved-changes prompt offscreen validation | PhotoCraft contributors; captures by @arthurdeka | PhotoCraft's egui test harness, Linux runner with simulated platform notation | MIT, [`evidence-1830/LICENSE-MIT`](evidence-1830/LICENSE-MIT) |
+
 ## Bundled in the app
 
 | Path | Title | Author | Source | License |
