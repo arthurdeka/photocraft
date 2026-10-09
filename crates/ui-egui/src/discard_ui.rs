@@ -219,10 +219,8 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
     };
     let mut answer = ctx.input_mut(|i| buttons.iter().find(|b| b.2.is_some_and(|k| i.consume_key(egui::Modifiers::NONE, k))).map(|b| b.4));
     // macOS keeps the letter shortcuts without showing mnemonics in the save alert (#1830).
-    let labels: Vec<String> = buttons
-        .iter()
-        .map(|b| if mac && !reverts { tl!(b.1).to_string() } else { b.2.map_or_else(|| tl!(b.1).to_string(), |k| mnemonic(b.1, k)) })
-        .collect();
+    let labels: Vec<String> =
+        buttons.iter().map(|b| if mac && !reverts { tl!(b.1).to_string() } else { b.2.map_or_else(|| tl!(b.1).to_string(), |k| mnemonic(b.1, k)) }).collect();
     let row: Vec<DialogButton> = buttons.iter().zip(&labels).map(|(b, label)| DialogButton::new(b.0, label, b.3)).collect();
     let modal = egui::Modal::new(egui::Id::new("discard-prompt")).show(ctx, |ui| {
         ui.set_max_width(420.0);
