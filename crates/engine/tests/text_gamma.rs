@@ -10,9 +10,14 @@
 
 use photocraft_engine::Session;
 use serde_json::json;
+use std::sync::{Mutex, PoisonError};
+
+/// The gamma is process-wide, so the tests in this file take turns.
+static GAMMA: Mutex<()> = Mutex::new(());
 
 #[test]
 fn blend_text_gamma_setting() {
+    let _turn = GAMMA.lock().unwrap_or_else(PoisonError::into_inner);
     let mut s = Session::new();
     assert!((s.color.settings.blend_text_gamma - 1.45).abs() < 1e-6);
     assert!(s.execute("edit.colorSettings", json!({"blendTextGamma": 3.0})).is_err());
@@ -27,4 +32,27 @@ fn blend_text_gamma_setting() {
     s.execute("edit.colorSettings", json!({"blendTextGamma": true})).unwrap();
     assert!((s.color.settings.blend_text_gamma - 1.45).abs() < 1e-6);
     assert!((photocraft_compose::psblend::text_gamma() - 1.45).abs() < 1e-6);
+}
+
+#[test]
+fn prefs_set_and_reset_apply_the_text_gamma() {
+    let _turn = GAMMA.lock().unwrap_or_else(PoisonError::into_inner);
+    let gamma = photocraft_compose::psblend::text_gamma;
+    let mut s = Session::new();
+    s.execute("prefs.set", json!({"path": "colorSettings.blendTextGamma", "value": 1.8})).unwrap();
+    assert!((gamma() - 1.8).abs() < 1e-6);
+    s.execute("prefs.reset", json!({"path": "colorSettings.blendTextGamma"})).unwrap();
+    assert!((gamma() - 1.45).abs() < 1e-6);
+    s.execute("prefs.set", json!({"values": {"colorSettings.blendTextGamma": 1.0}})).unwrap();
+    assert_eq!(gamma(), 1.0);
+    s.execute("prefs.reset", json!({"path": "colorSettings"})).unwrap();
+    assert!((gamma() - 1.45).abs() < 1e-6);
+    s.execute("prefs.set", json!({"path": "colorSettings.blendTextGamma", "value": 2.0})).unwrap();
+    s.execute("prefs.reset", json!({})).unwrap();
+    assert!((s.color.settings.blend_text_gamma - 1.45).abs() < 1e-6);
+    assert!((gamma() - 1.45).abs() < 1e-6);
+    // A rejected batch changes neither the setting nor the compositor.
+    assert!(s.execute("prefs.set", json!({"values": {"colorSettings.blendTextGamma": 1.8, "colorSettings.intent": "nope"}})).is_err());
+    assert!((s.color.settings.blend_text_gamma - 1.45).abs() < 1e-6);
+    assert!((gamma() - 1.45).abs() < 1e-6);
 }

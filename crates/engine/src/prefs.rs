@@ -1396,6 +1396,8 @@ fn prefs_set(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     s.apply_prefs();
+    // A changed `colorSettings.blendTextGamma` reaches the compositor, as `edit.colorSettings` does.
+    photocraft_compose::psblend::set_text_gamma(s.color.settings.blend_text_gamma);
     let view = s.prefs_view();
     let out: Map<String, Value> = changes.iter().map(|(k, _)| (k.clone(), get_path(&view, k).cloned().unwrap_or(Value::Null))).collect();
     Ok(Value::Object(out))
@@ -1425,6 +1427,7 @@ fn prefs_reset(s: &mut Session, p: &Value) -> Result<Value> {
     }
     s.prefs.edit(|_| ());
     s.apply_prefs();
+    photocraft_compose::psblend::set_text_gamma(s.color.settings.blend_text_gamma);
     if path.is_some_and(|path| keyed(path).is_some()) {
         // The removed override is absent, so reading its old path would report an error.
         Ok(Value::Null)
