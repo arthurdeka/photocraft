@@ -764,6 +764,7 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
         }),
         "panels": app.ui.panels,
         "views": app.ui.views,
+        "view": app.ui.view,
         "dialogs": dialogs,
         "windows": app.ui.windows,
         "theme": app.ui.theme,
@@ -884,6 +885,22 @@ mod tests {
         let entries = inspected.pointer("/result/canvasToolMenu/entries").and_then(Value::as_array).unwrap();
         assert!(entries.iter().any(|entry| entry.get("id") == Some(&json!("select.inverse")) && entry.get("enabled") == Some(&json!(true))));
         assert!(app.session.active().unwrap().doc.selection.is_some(), "right-click must not edit selection");
+    }
+
+    #[test]
+    fn inspect_reports_the_view_preferences_beside_the_document_views() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        let ctx = egui::Context::default();
+        let inspected = call(&mut app, &ctx, "ui.inspect", json!({}));
+        assert_eq!(inspected.pointer("/result/view/screen_mode"), Some(&json!("standard")));
+        assert_eq!(inspected.pointer("/result/view/show/selection_edges"), Some(&json!(true)));
+        assert_eq!(inspected.pointer("/result/view/flip_horizontal"), Some(&json!(false)));
+        assert!(inspected.pointer("/result/views").is_some_and(Value::is_array), "the per-document views stay under `views`");
+        app.ui.view.flip_horizontal = true;
+        app.ui.view.show.selection_edges = false;
+        let inspected = call(&mut app, &ctx, "ui.inspect", json!({}));
+        assert_eq!(inspected.pointer("/result/view/flip_horizontal"), Some(&json!(true)));
+        assert_eq!(inspected.pointer("/result/view/show/selection_edges"), Some(&json!(false)));
     }
 
     #[test]
