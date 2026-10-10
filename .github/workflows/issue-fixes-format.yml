@@ -1,0 +1,31 @@
+name: Format issue-fix branches
+
+on:
+  push:
+    branches: [ci/issue-fixes-format]
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Record formatting patches for each branch
+        run: |
+          mkdir -p /tmp/format-patches
+          for item in 2479-palette-separators 2600-ruler-corner-clipping 2602-status-dimension-units 2392-workspace-host-flags; do
+            git fetch origin "fix/$item"
+            git checkout --detach FETCH_HEAD
+            cargo fmt --all
+            git diff > "/tmp/format-patches/$item.patch"
+            git restore .
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issue-format-patches
+          path: /tmp/format-patches/
