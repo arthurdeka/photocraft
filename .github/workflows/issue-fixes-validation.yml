@@ -20,10 +20,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - issue: 2479
+            branch: fix/2479-palette-separators
+            regression: palette_search_omits_menu_separators
+            snapshot_env: PHOTOCRAFT_PALETTE_SNAPSHOTS
+          - issue: 2600
+            branch: fix/2600-ruler-corner-clipping
+            regression: ruler_ticks_labels_and_pointer_stay_out_of_the_origin_corner
+            snapshot_env: PHOTOCRAFT_RULER_SNAPSHOTS
           - issue: 2602
             branch: fix/2602-status-dimension-units
             regression: status_bar_updates_dimensions_after_a_ruler_preference_change
             snapshot_env: PHOTOCRAFT_STATUS_SNAPSHOTS
+          - issue: 2392
+            branch: fix/2392-workspace-host-flags
+            regression: saved_workspace_keeps_host_menu_and_rail_hidden_in_the_rendered_ui
+            snapshot_env: PHOTOCRAFT_WORKSPACE_SNAPSHOTS
     steps:
       - uses: actions/checkout@v4
         with:
