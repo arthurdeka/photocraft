@@ -20,6 +20,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - issue: 2479
+            branch: fix/2479-palette-separators
+            regression: palette_search_omits_menu_separators
+            snapshot_env: PHOTOCRAFT_PALETTE_SNAPSHOTS
           - issue: 2600
             branch: fix/2600-ruler-corner-clipping
             regression: ruler_ticks_labels_and_pointer_stay_out_of_the_origin_corner
