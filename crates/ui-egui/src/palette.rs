@@ -144,7 +144,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                     // fresh session) it falls back to the full fuzzy list, as before.
                     let mut hits: Vec<(i32, String, String, Option<String>, bool)> = if empty { recent_hits(&recents, &menus, lang) } else { Vec::new() };
                     if !empty || hits.is_empty() {
-                        hits.extend(menus.into_iter().filter_map(|m| {
+                        hits.extend(menus.into_iter().filter(|m| m.label != "---").filter_map(|m| {
                             let path_en = m.path.join(" › ");
                             let path = m.path.iter().map(|p| crate::i18n::tr(lang, p)).collect::<Vec<_>>().join(" › ");
                             let label = crate::i18n::tr_id(lang, &m.id, &m.label);
@@ -242,6 +242,75 @@ mod tests {
 
     use super::{fuzzy_score, push_recent};
     use crate::PhotocraftApp;
+
+    fn painted_labels(shape: &egui::Shape, labels: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(text) => labels.push(text.galley.job.text.clone()),
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    painted_labels(shape, labels);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn palette_search_omits_menu_separators() {
+        let mut failures = Vec::new();
+        for theme in crate::theme::ThemeKind::ALL {
+            for query in ["f", "", "file", "filter"] {
+                let builder = Harness::builder().with_size(vec2(1200.0, 800.0)).with_max_steps(64);
+                let builder = if std::env::var_os("PHOTOCRAFT_PALETTE_SNAPSHOTS").is_some() { builder.wgpu() } else { builder };
+                let mut h = builder.build_eframe(move |cc| {
+                    PhotocraftApp::setup_context(&cc.egui_ctx, theme);
+                    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+                    app.run("prefs.set", json!({"path": "interface.theme", "value": theme.id()})).unwrap();
+                    app.ui.theme = theme;
+                    app
+                });
+                assert!(crate::menus::menu_items(h.state()).iter().any(|m| m.label == "---"), "menus retain their separators");
+                h.state_mut().ui.palette_open = true;
+                h.ctx.data_mut(|d| d.insert_temp(egui::Id::new("palette-query"), query.to_string()));
+                h.run_steps(4);
+                assert_eq!(h.state().ui.theme, theme, "the fixture renders the requested theme");
+                let mut labels = Vec::new();
+                for shape in &h.output().shapes {
+                    painted_labels(&shape.shape, &mut labels);
+                }
+                if query == "f"
+                    && let Some(dir) = std::env::var_os("PHOTOCRAFT_PALETTE_SNAPSHOTS")
+                {
+                    let dir = std::path::PathBuf::from(dir);
+                    std::fs::create_dir_all(&dir).unwrap();
+                    h.render().unwrap().save(dir.join(format!("{theme:?}.png"))).unwrap();
+                }
+                if labels.iter().any(|label| label == "---") {
+                    failures.push(format!("{theme:?}, query={query:?}"));
+                }
+                assert!(!labels.iter().any(|label| label == "No matching commands"), "real commands match {query:?}");
+            }
+        }
+        assert!(failures.is_empty(), "separator rows appear in the palette: {failures:?}");
+    }
+
+    #[test]
+    fn palette_keeps_contextually_disabled_commands_visible() {
+        let mut h = Harness::builder().with_size(vec2(1200.0, 800.0)).with_max_steps(64).build_eframe(|cc| {
+            PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+            PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default())
+        });
+        let save = crate::menus::menu_items(h.state()).into_iter().find(|m| m.id == "file.save").unwrap();
+        assert!(!save.enabled, "Save needs an open document");
+        h.state_mut().ui.palette_open = true;
+        h.ctx.data_mut(|d| d.insert_temp(egui::Id::new("palette-query"), "save".to_string()));
+        h.run_steps(4);
+        let mut labels = Vec::new();
+        for shape in &h.output().shapes {
+            painted_labels(&shape.shape, &mut labels);
+        }
+        assert!(labels.iter().any(|label| label == save.label.trim_end_matches('…')), "disabled Save remains discoverable");
+    }
 
     #[test]
     fn open_palette_interrupts_the_ime_only_when_it_takes_focus() {

@@ -82,6 +82,10 @@ The app's top bar (`panels::title_bar`) starts with the brand mark (the app icon
 
 ## Menus
 
+The command palette searches command labels and menu paths in the current language and English,
+and includes toolbar tools. Menu separators are layout metadata and do not appear as search
+results. Commands disabled by the current document state remain visible with muted text.
+
 `menu_catalog.rs` holds Photoshop's menu tree (standard command names, order, separators, default shortcuts). Items whose id matches an engine or UI command are live; others render disabled until implemented. Give new commands the catalogue's id (for example `image.imageSize`) and they light up in the right place automatically.
 
 Menus never run off the window: the menu bar's menus and submenus scroll with arrows (`menu_nav::level`), and long right-click menus (Layers, canvas tools, Channels, Paths, document tabs) wrap their rows in `widgets::menu_scroll`, so they move up to fit and scroll only when taller than the visible window.
