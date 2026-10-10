@@ -10,6 +10,7 @@ These files are held only on this fork's evidence branch, outside the upstream P
 
 | Issue | Pull request | Source revision | Validation job |
 | --- | --- | --- | --- |
+| #2479 | [#2616](https://github.com/storytold/photocraft/pull/2616) | `060b65ba8804777f6b828b8f8a206ebfb397bac1` | [Palette validation](https://github.com/arthurdeka/photocraft/actions/runs/38063826511/job/114247332001) |
 | #2600 | [#2617](https://github.com/storytold/photocraft/pull/2617) | `1d223a98cddcaae5a903b369116ee52c37bf4ea1` | [Ruler validation](https://github.com/arthurdeka/photocraft/actions/runs/38063043684/job/114245019422) |
 
 The original UI assets retain their existing attribution and licence terms. The
