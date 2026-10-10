@@ -20,10 +20,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - issue: 2479
-            branch: fix/2479-palette-separators
-            regression: palette_search_omits_menu_separators
-            snapshot_env: PHOTOCRAFT_PALETTE_SNAPSHOTS
+          - issue: 2600
+            branch: fix/2600-ruler-corner-clipping
+            regression: ruler_ticks_labels_and_pointer_stay_out_of_the_origin_corner
+            snapshot_env: PHOTOCRAFT_RULER_SNAPSHOTS
+          - issue: 2602
+            branch: fix/2602-status-dimension-units
+            regression: status_bar_updates_dimensions_after_a_ruler_preference_change
+            snapshot_env: PHOTOCRAFT_STATUS_SNAPSHOTS
+          - issue: 2392
+            branch: fix/2392-workspace-host-flags
+            regression: saved_workspace_keeps_host_menu_and_rail_hidden_in_the_rendered_ui
+            snapshot_env: PHOTOCRAFT_WORKSPACE_SNAPSHOTS
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,21 +60,40 @@ jobs:
           REGRESSION: ${{ matrix.regression }}
           SNAPSHOT_ENV: ${{ matrix.snapshot_env }}
         run: |
-          cp crates/ui-egui/src/palette.rs /tmp/palette-fixed.rs
           python3 - <<'PY'
+          import os
           from pathlib import Path
-          p = Path('crates/ui-egui/src/palette.rs')
+          issue = os.environ['ISSUE']
+          name = {'2479': 'palette', '2600': 'rulers', '2602': 'chrome_ui', '2392': 'dock'}[issue]
+          p = Path(f'crates/ui-egui/src/{name}.rs')
           s = p.read_text()
-          fix = '.filter(|m| m.label != "---")'
-          assert s.count(fix) == 1
-          p.write_text(s.replace(fix, ''))
+          Path('/tmp/fixed-source.rs').write_text(s)
+          Path('/tmp/fixed-source-path').write_text(str(p))
+          if issue == '2479':
+              fix = '.filter(|m| m.label != "---")'
+              assert s.count(fix) == 1
+              s = s.replace(fix, '')
+          elif issue == '2600':
+              fix = 'let p = p.with_clip_rect(if vertical { left } else { top });'
+              assert s.count(fix) == 1
+              s = s.replace(fix, '').replace('p.with_clip_rect(top).line_segment', 'p.line_segment').replace('p.with_clip_rect(left).line_segment', 'p.line_segment')
+          elif issue == '2602':
+              fix = '&app.session.prefs().units_and_rulers'
+              assert s.count(fix) == 1
+              s = s.replace(fix, '&Default::default()')
+          else:
+              for fix in ['p.menu_bar = app.ui.panels.menu_bar;', 'p.rail = app.ui.panels.rail;']:
+                  assert s.count(fix) == 1
+                  s = s.replace(fix, '')
+              s = s.replace('if let Some(mut p)', 'if let Some(p)')
+          p.write_text(s)
           PY
           set +e
           env "$SNAPSHOT_ENV=$GITHUB_WORKSPACE/evidence/before" cargo --config 'profile.dev.package."*".opt-level=0' test -p photocraft-ui-egui --locked --lib "$REGRESSION" -- --nocapture > evidence/before-test.log 2>&1
           result=$?
           set -e
           cat evidence/before-test.log
-          cp /tmp/palette-fixed.rs crates/ui-egui/src/palette.rs
+          cp /tmp/fixed-source.rs "$(cat /tmp/fixed-source-path)"
           test "$result" -ne 0
           grep -q 'test result: FAILED' evidence/before-test.log
       - name: Capture corrected behavior
