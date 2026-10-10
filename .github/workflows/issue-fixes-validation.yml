@@ -1,0 +1,90 @@
+name: Validate Arthur's issue fixes
+
+on:
+  push:
+    branches: [ci/issue-fixes-validation]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_DEV_OPT_LEVEL: "0"
+  XDG_RUNTIME_DIR: /tmp
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - issue: 2479
+            branch: fix/2479-palette-separators
+            regression: palette_search_omits_menu_separators
+            snapshot_env: PHOTOCRAFT_PALETTE_SNAPSHOTS
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev mesa-vulkan-drivers
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: issue-fixes-ui
+          cache-on-failure: true
+      - name: Format and record any formatting-only patch
+        run: |
+          mkdir -p evidence
+          cargo fmt --all
+          git diff > evidence/format.patch
+          cargo fmt --all --check
+      - name: Prove regression and capture original behavior
+        env:
+          ISSUE: ${{ matrix.issue }}
+          REGRESSION: ${{ matrix.regression }}
+          SNAPSHOT_ENV: ${{ matrix.snapshot_env }}
+        run: |
+          cp crates/ui-egui/src/palette.rs /tmp/palette-fixed.rs
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('crates/ui-egui/src/palette.rs')
+          s = p.read_text()
+          fix = '.filter(|m| m.label != "---")'
+          assert s.count(fix) == 1
+          p.write_text(s.replace(fix, ''))
+          PY
+          set +e
+          env "$SNAPSHOT_ENV=$GITHUB_WORKSPACE/evidence/before" cargo --config 'profile.dev.package."*".opt-level=0' test -p photocraft-ui-egui --locked --lib "$REGRESSION" -- --nocapture > evidence/before-test.log 2>&1
+          result=$?
+          set -e
+          cat evidence/before-test.log
+          cp /tmp/palette-fixed.rs crates/ui-egui/src/palette.rs
+          test "$result" -ne 0
+          grep -q 'test result: FAILED' evidence/before-test.log
+      - name: Capture corrected behavior
+        env:
+          REGRESSION: ${{ matrix.regression }}
+          SNAPSHOT_ENV: ${{ matrix.snapshot_env }}
+        run: env "$SNAPSHOT_ENV=$GITHUB_WORKSPACE/evidence/after" cargo --config 'profile.dev.package."*".opt-level=0' test -p photocraft-ui-egui --locked --lib "$REGRESSION" -- --nocapture
+      - name: UI unit, integration and documentation tests
+        run: cargo --config 'profile.dev.package."*".opt-level=0' test -p photocraft-ui-egui --locked
+      - name: Clippy
+        run: cargo --config 'profile.dev.package."*".opt-level=0' clippy -p photocraft-ui-egui --all-targets --locked -- -D warnings
+      - name: Dependency layering
+        run: cargo --config 'profile.dev.package."*".opt-level=0' xtask layers
+      - name: WebAssembly checks
+        run: cargo --config 'profile.dev.package."*".opt-level=0' xtask wasm
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue-${{ matrix.issue }}-evidence
+          path: evidence/
+          if-no-files-found: error
