@@ -1,5 +1,11 @@
 # Attribution
 
+## Fork-only review evidence
+
+| Path | Title | Author | Source | License |
+|---|---|---|---|---|
+| `issue-evidence/2026-10-10/**/*.png` | PhotoCraft issue-fix regression renders and comparison layouts | @arthurdeka | Offscreen regression fixtures linked in `issue-evidence/2026-10-10/README.md` | MIT OR Apache-2.0; original UI asset terms retained |
+
 Every non-code asset in this repository, with its author, source and license. PhotoCraft's own
 code and original assets are MIT OR Apache-2.0 (see [`LICENSE-MIT`](LICENSE-MIT),
 [`LICENSE-APACHE`](LICENSE-APACHE) and [`NOTICE`](NOTICE)). When you add an asset, add a row here
