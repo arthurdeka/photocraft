@@ -11,7 +11,7 @@ on:
         default: fix/3939-pngsuite-integrity
       area:
         type: choice
-        options: [xtask, ui]
+        options: [xtask, ui, evidence]
         default: xtask
       captures:
         type: boolean
@@ -33,7 +33,7 @@ jobs:
         with:
           ref: ${{ inputs.target_ref || 'fix/3939-pngsuite-integrity' }}
       - name: Install UI dependencies
-        if: inputs.area == 'ui'
+        if: inputs.area == 'ui' || inputs.area == 'evidence'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev mesa-vulkan-drivers
@@ -48,7 +48,7 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
       - name: Validate xtask and PngSuite fetching
-        if: inputs.area != 'ui'
+        if: inputs.area == 'xtask' || github.event_name == 'push'
         run: |
           cargo test -p xtask --locked
           cargo clippy -p xtask --all-targets --locked -- -D warnings
@@ -58,13 +58,18 @@ jobs:
           printf tampered > corpus/pngsuite/basn0g01.png
           cargo xtask corpus --pngsuite
           cargo xtask corpus --pngsuite
-      - name: Validate UI
+      - name: UI tests
         if: inputs.area == 'ui'
-        run: |
-          cargo test -p photocraft-ui-egui --lib --locked
-          cargo clippy -p photocraft-ui-egui --all-targets --locked -- -D warnings
-          cargo xtask layers
-          cargo xtask wasm
+        run: cargo test -p photocraft-ui-egui --lib --locked
+      - name: UI Clippy
+        if: inputs.area == 'ui'
+        run: cargo clippy -p photocraft-ui-egui --all-targets --locked -- -D warnings
+      - name: Dependency layers
+        if: inputs.area == 'ui'
+        run: cargo xtask layers
+      - name: UI WebAssembly
+        if: inputs.area == 'ui'
+        run: cargo xtask wasm
       - name: Capture Gradient Map before and after
         if: inputs.captures
         env:
