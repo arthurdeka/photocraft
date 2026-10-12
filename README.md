@@ -10,4 +10,4 @@ The zoom probe supplies a mouse drag at the left logical viewport edge, simulate
 
 These captures and the capture instrumentation are hosted separately from the contribution branches. No capture image, snapshot exporter or validation workflow is part of either PR.
 
-License: MIT OR Apache-2.0, like the captured project UI. See the license files.
+The underlying UI is MIT OR Apache-2.0. The unmodified ArtCraft mark remains subject to `LICENSE-brand.txt`; these captures are kept in this fork to propose changes to PhotoCraft. See `ATTRIBUTION.md`.
