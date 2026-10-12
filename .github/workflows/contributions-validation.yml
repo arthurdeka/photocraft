@@ -1,0 +1,83 @@
+name: Contribution validation
+
+on:
+  push:
+    branches: [ci/contributions-3939-2958-3344]
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Feature commit or branch to validate
+        required: true
+        default: fix/3939-pngsuite-integrity
+      area:
+        type: choice
+        options: [xtask, ui]
+        default: xtask
+      captures:
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || 'fix/3939-pngsuite-integrity' }}
+      - name: Install UI dependencies
+        if: inputs.area == 'ui'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev mesa-vulkan-drivers
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: contributions-3939-2958-3344
+          cache-on-failure: true
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Validate xtask and PngSuite fetching
+        if: inputs.area != 'ui'
+        run: |
+          cargo test -p xtask --locked
+          cargo clippy -p xtask --all-targets --locked -- -D warnings
+          cargo xtask layers
+          cargo xtask corpus --pngsuite
+          cargo xtask corpus --pngsuite
+          printf tampered > corpus/pngsuite/basn0g01.png
+          cargo xtask corpus --pngsuite
+          cargo xtask corpus --pngsuite
+      - name: Validate UI
+        if: inputs.area == 'ui'
+        run: |
+          cargo test -p photocraft-ui-egui --lib --locked
+          cargo clippy -p photocraft-ui-egui --all-targets --locked -- -D warnings
+          cargo xtask layers
+          cargo xtask wasm
+      - name: Capture Gradient Map before and after
+        if: inputs.captures
+        env:
+          WGPU_BACKEND: vulkan
+          XDG_RUNTIME_DIR: /tmp
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: |
+          mkdir -p evidence
+          script='[["engine.execute",{"command":"file.new","params":{"width":512,"height":384,"background":"white"}}],["engine.execute",{"command":"layer.newAdjustmentLayer.gradientMap","params":{}}]]'
+          cargo run -p photocraft-ui-egui --example snapshot --locked -- --out evidence/gradient-map-after.png --size 1440x900 --scale 1 --safe-gpu --script "$script"
+          git fetch origin 5e0a6d404d3b02b811ea5ba066e9c9d6b661314d
+          git worktree add --detach ../before 5e0a6d404d3b02b811ea5ba066e9c9d6b661314d
+          cd ../before
+          cargo run -p photocraft-ui-egui --example snapshot --locked -- --out "${{ github.workspace }}/evidence/gradient-map-before.png" --size 1440x900 --scale 1 --safe-gpu --script "$script"
+      - uses: actions/upload-artifact@v4
+        if: inputs.captures && always()
+        with:
+          name: gradient-map-evidence
+          path: evidence/
