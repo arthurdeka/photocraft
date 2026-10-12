@@ -43,7 +43,7 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: contributions-3939-2958-3344
+          shared-key: contributions-${{ inputs.area == 'evidence' && 'ui' || inputs.area || 'xtask' }}
           cache-on-failure: true
       - name: Format
         run: cargo fmt --all -- --check
