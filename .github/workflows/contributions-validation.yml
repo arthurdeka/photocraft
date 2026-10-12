@@ -78,7 +78,7 @@ jobs:
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
         run: |
           mkdir -p evidence
-          script='[["engine.execute",{"command":"file.new","params":{"width":512,"height":384,"background":"white"}}],["engine.execute",{"command":"layer.newAdjustmentLayer.gradientMap","params":{}}]]'
+          script='[["engine.execute",{"command":"file.new","params":{"width":512,"height":384,"background":"white"}}],["engine.execute",{"command":"layer.newAdjustmentLayer.gradientMap","params":{}}],["ui.set",{"dock":{"heights":{"properties":360}}}]]'
           cargo run -p photocraft-ui-egui --example snapshot --locked -- --out evidence/gradient-map-after.png --size 1440x900 --scale 1 --safe-gpu --script "$script"
           git fetch origin 5e0a6d404d3b02b811ea5ba066e9c9d6b661314d
           git worktree add --detach ../before 5e0a6d404d3b02b811ea5ba066e9c9d6b661314d
